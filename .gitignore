@@ -1,0 +1,5 @@
+__pycache__/
+.env
+*.pyc
+
+drawing_to_cad_workspace/
