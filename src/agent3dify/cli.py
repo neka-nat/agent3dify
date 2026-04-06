@@ -24,6 +24,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="Model for the image_editor tool. Overrides IMAGE_EDITOR_MODEL.",
     )
     parser.add_argument(
+        "--view-detector-model",
+        help="Model for extract_view detection. Overrides VIEW_DETECTOR_MODEL.",
+    )
+    parser.add_argument(
         "--builder-model",
         "--modeler-model",
         dest="builder_model",
@@ -43,6 +47,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     models = AgentModels.from_env().with_overrides(
         supervisor=args.supervisor_model,
         image_editor=args.image_editor_model,
+        view_detector=args.view_detector_model,
         builder=args.builder_model,
         verifier=args.verifier_model,
     )

@@ -19,6 +19,7 @@ def build_agent(workspace: Workspace, *, models: AgentModels, debug: bool = True
     image_editor = make_image_editor_tool(
         workspace,
         model_name=models.image_editor_model(),
+        view_detector_model=models.view_detector_model(),
     )
     compare_projection_pair = make_compare_projection_pair_tool(workspace)
 

@@ -12,7 +12,7 @@ SUPERVISOR_PROMPT = dedent(
     Workflow guidance:
     1. Use the image_editor tool when the drawing needs cleanup or view extraction before modeling or verification.
        - Use operation="extract_outline" to create a cleaner geometry-only drawing
-       - Use operation="extract_view" with view_name like front, top, or right to isolate a specific orthographic view
+       - Use operation="extract_view" with view_name like front, top, or right to detect and crop a specific orthographic view
        - Use operation="custom" only for narrow corrective edits
        - Save preprocessed outputs under /preprocessed/
 

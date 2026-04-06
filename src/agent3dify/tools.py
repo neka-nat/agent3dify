@@ -8,8 +8,12 @@ from langchain.tools import tool
 
 from .image_editor import (
     GoogleGenAIImageEditor,
+    GoogleGenAIViewDetector,
+    DetectedView,
     ImageEditorBackend,
+    ViewDetectorBackend,
     build_image_edit_prompt,
+    crop_detected_view,
     load_editor_input_images,
     save_generated_image,
     validate_generated_image,
@@ -123,9 +127,12 @@ def make_image_editor_tool(
     workspace: Workspace,
     *,
     model_name: str,
+    view_detector_model: str,
     backend: ImageEditorBackend | None = None,
+    detector_backend: ViewDetectorBackend | None = None,
 ):
     editor_backend = backend or GoogleGenAIImageEditor(model=model_name)
+    view_detector = detector_backend or GoogleGenAIViewDetector(model=view_detector_model)
 
     @tool(parse_docstring=True)
     def image_editor(
@@ -135,13 +142,13 @@ def make_image_editor_tool(
         view_name: str | None = None,
         instruction: str | None = None,
     ) -> dict:
-        """Edit a drawing image with an image model and save the result into the workspace.
+        """Edit a drawing image or extract a view, then save the result into the workspace.
 
         Args:
             operation: One of extract_outline, extract_view, or custom.
-            input_paths: Workspace-relative image paths used as editing inputs.
-            output_path: Workspace-relative PNG path for the edited result.
-            view_name: Required when operation is extract_view.
+            input_paths: Workspace-relative image paths used as editing inputs. extract_view requires exactly one source image.
+            output_path: Workspace-relative PNG path for the result.
+            view_name: Required when operation is extract_view and names the orthographic view to detect and crop.
             instruction: Required when operation is custom.
         """
         if not input_paths:
@@ -156,7 +163,20 @@ def make_image_editor_tool(
         output_file = workspace.resolve_path(output_path)
 
         images = load_editor_input_images(source_paths)
-        generated_image, text_response = editor_backend.edit(prompt=prompt, images=images)
+        text_response: str | None = None
+        detection: DetectedView | None = None
+        crop_box: tuple[int, int, int, int] | None = None
+
+        if operation.strip().lower() == "extract_view":
+            if len(images) != 1:
+                raise ValueError("extract_view requires exactly one input image.")
+            if not view_name:
+                raise ValueError("view_name is required for operation='extract_view'")
+            detection = view_detector.detect(view_name=view_name, image=images[0])
+            generated_image, crop_box = crop_detected_view(images[0], detection)
+        else:
+            generated_image, text_response = editor_backend.edit(prompt=prompt, images=images)
+
         validate_generated_image(generated_image)
         save_generated_image(generated_image, output_file)
 
@@ -170,6 +190,14 @@ def make_image_editor_tool(
         }
         if view_name:
             payload["view_name"] = view_name
+        if detection is not None:
+            payload["box_2d"] = list(detection.box_2d)
+            if detection.confidence is not None:
+                payload["confidence"] = detection.confidence
+            if detection.reason:
+                payload["reason"] = detection.reason
+            if crop_box is not None:
+                payload["crop_box"] = list(crop_box)
         if text_response:
             payload["text_response"] = text_response
         return payload
