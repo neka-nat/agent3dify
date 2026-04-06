@@ -50,6 +50,38 @@ class Workspace:
             files_in_workspace.extend(path for path in self.root.glob(pattern) if path.is_file())
         return sorted(set(files_in_workspace))
 
+    def archive_generated_model(self) -> Path | None:
+        source = self.root / "generated" / "model.py"
+        if not source.exists() or not source.is_file():
+            return None
+
+        history_dir = self.root / "generated" / "history"
+        history_dir.mkdir(parents=True, exist_ok=True)
+
+        existing = sorted(history_dir.glob("model_r*.py"))
+        if existing:
+            latest = existing[-1]
+            try:
+                if latest.read_bytes() == source.read_bytes():
+                    return None
+            except OSError:
+                pass
+
+        next_index = 1
+        for path in existing:
+            stem = path.stem
+            if not stem.startswith("model_r"):
+                continue
+            suffix = stem.removeprefix("model_r")
+            try:
+                next_index = max(next_index, int(suffix) + 1)
+            except ValueError:
+                continue
+
+        destination = history_dir / f"model_r{next_index:03d}.py"
+        shutil.copy2(source, destination)
+        return destination
+
 
 def default_workspace() -> Workspace:
     return Workspace(Path("./drawing_to_cad_workspace"))

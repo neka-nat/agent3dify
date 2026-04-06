@@ -245,15 +245,19 @@ class ProgressReporter:
 
     def _summarize_builder(self) -> Summary:
         model_path = self.workspace.root / "generated" / "model.py"
+        history_dir = self.workspace.root / "generated" / "history"
         step_path = self.workspace.root / "artifacts" / "model.step"
         stl_path = self.workspace.root / "artifacts" / "model.stl"
         build_report_path = self.workspace.root / "artifacts" / "build_report.json"
         build_report = self._load_json(build_report_path)
         projection_count = len(list((self.workspace.root / "artifacts" / "projections").glob("*.png")))
+        history_count = len(list(history_dir.glob("model_r*.py")))
 
         parts: list[str] = []
         if model_path.exists():
             parts.append("generated model.py")
+        if history_count:
+            parts.append(f"history={history_count}")
         if step_path.exists():
             parts.append("model.step")
         if stl_path.exists():

@@ -62,6 +62,7 @@ class ExecutionGuard:
             self._record_verifier_completion()
 
     def _record_builder_completion(self) -> None:
+        self.workspace.archive_generated_model()
         signature = self._signature_for_paths(
             [
                 "generated/model.py",
