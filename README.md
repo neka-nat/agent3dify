@@ -2,6 +2,20 @@
 
 A tool for converting 2D drawings into 3D models using a combination of AI agents.
 
+```mermaid
+flowchart TD
+    U[User] --> S[Supervisor]
+
+    S -->|optional analysis| A[Drawing Analyzer]
+    A -->|summary / completion| S
+
+    S -->|build/revision task| B[CadQuery Builder]
+    B -->|summary / completion| S
+
+    S -->|optional verification| V[Render Verifier]
+    V -->|summary / completion| S
+```
+
 ```bash
 uv sync
 ```
