@@ -18,7 +18,9 @@ Run the agent with custom models:
 uv run agent3dify \
   --drawing data/b9-1.png \
   --model openai:gpt-5 \
-  --planner-model google_genai:gemini-3.1-pro-preview \
-  --modeler-model google_genai:gemini-3.1-pro-preview \
+  --analyzer-model google_genai:gemini-3.1-pro-preview \
+  --builder-model google_genai:gemini-3.1-pro-preview \
   --verifier-model google_genai:gemini-3.1-flash-preview
 ```
+
+`cadquery-builder` is the primary subagent. `drawing-analyzer` and `render-verifier` are optional helpers that run only when their outputs would materially help the build or revision.

@@ -7,7 +7,7 @@ from pathlib import Path
 
 
 INTERESTING_FILE_PATTERNS = [
-    "spec/**/*.json",
+    "analysis/**/*.json",
     "generated/**/*.py",
     "artifacts/**/*",
     "review/**/*.json",
@@ -16,20 +16,20 @@ INTERESTING_FILE_PATTERNS = [
 
 WORKSPACE_DIRS = [
     "input",
-    "spec",
+    "analysis",
     "preprocessed",
     "templates",
     "generated",
     "artifacts/projections",
     "review",
-    "skills/planner",
-    "skills/modeler",
+    "skills/analyzer",
+    "skills/builder",
     "skills/verifier",
 ]
 
 WORKSPACE_RESOURCE_MAP = {
-    "skills/planner/SKILL.md": "skills/planner/SKILL.md",
-    "skills/modeler/SKILL.md": "skills/modeler/SKILL.md",
+    "skills/analyzer/SKILL.md": "skills/analyzer/SKILL.md",
+    "skills/builder/SKILL.md": "skills/builder/SKILL.md",
     "skills/verifier/SKILL.md": "skills/verifier/SKILL.md",
     "templates/model_template.py": "templates/model_template.py",
 }

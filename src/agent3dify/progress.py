@@ -17,14 +17,14 @@ from .workspace import Workspace
 ROOT_AGENT_NAME = "drawing-to-cad-supervisor-local-shell"
 
 SUBAGENT_LABELS = {
-    "drawing-planner": "planner",
-    "cadquery-modeler": "modeler",
+    "drawing-analyzer": "analyzer",
+    "cadquery-builder": "builder",
     "render-verifier": "verifier",
 }
 
 SUBAGENT_STYLES = {
-    "drawing-planner": "cyan",
-    "cadquery-modeler": "magenta",
+    "drawing-analyzer": "cyan",
+    "cadquery-builder": "magenta",
     "render-verifier": "yellow",
 }
 
@@ -69,8 +69,8 @@ class ProgressReporter:
         table = Table.grid(padding=(0, 2))
         table.add_row("Workspace", str(self.workspace.root))
         table.add_row("Supervisor", self.models.supervisor)
-        table.add_row("Planner", self.models.planner_model())
-        table.add_row("Modeler", self.models.modeler_model())
+        table.add_row("Analyzer", self.models.analyzer_model())
+        table.add_row("Builder", self.models.builder_model())
         table.add_row("Verifier", self.models.verifier_model())
         self.console.print(Panel(table, title="Agent3dify Run", border_style="blue"))
 
@@ -127,8 +127,8 @@ class ProgressReporter:
         state.started_at = time.monotonic()
         state.status = "running"
 
-        if subagent == "cadquery-modeler" and state.runs > 1:
-            message = f"started attempt {state.runs}"
+        if subagent == "cadquery-builder" and state.runs > 1:
+            message = f"started revision {state.runs - 1}"
         else:
             message = "started"
         state.detail = message
@@ -161,14 +161,24 @@ class ProgressReporter:
             if len(running_agents) == 1:
                 subagent = running_agents[0]
 
-        if subagent == "cadquery-modeler" and tool_name == "execute":
+        if subagent == "cadquery-builder" and tool_name == "execute":
             command = str(tool_input.get("command", "")).strip()
             if command:
                 self._log(subagent, f"execute {self._truncate_command(command)}", style="dim")
-        elif subagent == "drawing-planner" and tool_name == "crop_reference_view":
+        elif subagent == "drawing-analyzer" and tool_name == "crop_reference_view":
             output_path = tool_input.get("output_path")
             if isinstance(output_path, str):
                 self._log(subagent, f"crop {output_path}", style="dim")
+        elif subagent == "drawing-analyzer" and tool_name == "preprocess_reference_image":
+            output_path = tool_input.get("output_path")
+            mode = tool_input.get("mode")
+            if isinstance(output_path, str):
+                suffix = f" ({mode})" if isinstance(mode, str) else ""
+                self._log(subagent, f"preprocess {output_path}{suffix}", style="dim")
+        elif subagent == "drawing-analyzer" and tool_name == "inspect_step_model":
+            step_path = tool_input.get("step_path")
+            if isinstance(step_path, str):
+                self._log(subagent, f"inspect {step_path}", style="dim")
         elif subagent == "render-verifier" and tool_name == "compare_projection_pair":
             reference = self._basename(tool_input.get("reference_path"))
             candidate = self._basename(tool_input.get("candidate_path"))
@@ -186,33 +196,29 @@ class ProgressReporter:
         return None
 
     def _summarize_subagent(self, subagent: str) -> Summary:
-        if subagent == "drawing-planner":
-            return self._summarize_planner()
-        if subagent == "cadquery-modeler":
-            return self._summarize_modeler()
+        if subagent == "drawing-analyzer":
+            return self._summarize_analyzer()
+        if subagent == "cadquery-builder":
+            return self._summarize_builder()
         if subagent == "render-verifier":
             return self._summarize_verifier()
         return Summary(status="completed", message="completed", style="green")
 
-    def _summarize_planner(self) -> Summary:
-        part_plan_path = self.workspace.root / "spec" / "part_plan.json"
-        view_map_path = self.workspace.root / "spec" / "view_map.json"
-        part_plan = self._load_json(part_plan_path)
+    def _summarize_analyzer(self) -> Summary:
+        analyzer_report_path = self.workspace.root / "analysis" / "analyzer_report.json"
+        view_map_path = self.workspace.root / "analysis" / "view_map.json"
+        analyzer_report = self._load_json(analyzer_report_path)
         view_map = self._load_json(view_map_path)
         crops = sorted((self.workspace.root / "preprocessed").glob("*_ref.png"))
 
         parts: list[str] = []
         written = []
-        if part_plan_path.exists():
-            written.append("part_plan.json")
+        if analyzer_report_path.exists():
+            written.append("analyzer_report.json")
         if view_map_path.exists():
             written.append("view_map.json")
         if written:
             parts.append(f"wrote {', '.join(written)}")
-
-        features = part_plan.get("features") if isinstance(part_plan, dict) else None
-        if isinstance(features, list):
-            parts.append(f"features={len(features)}")
 
         views = sorted(view_map.keys()) if isinstance(view_map, dict) else []
         if views:
@@ -221,19 +227,28 @@ class ProgressReporter:
         if crops:
             parts.append(f"crops={len(crops)}")
 
-        confidence = part_plan.get("overall_confidence") if isinstance(part_plan, dict) else None
+        drawing_analysis = analyzer_report.get("drawing_analysis") if isinstance(analyzer_report, dict) else None
+        builder_hints = analyzer_report.get("builder_hints") if isinstance(analyzer_report, dict) else None
+        step_analysis = analyzer_report.get("step_analysis") if isinstance(analyzer_report, dict) else None
+
+        if isinstance(builder_hints, list):
+            parts.append(f"hints={len(builder_hints)}")
+        if isinstance(step_analysis, dict) and step_analysis:
+            parts.append("step-analysis")
+
+        confidence = drawing_analysis.get("overall_confidence") if isinstance(drawing_analysis, dict) else None
         if isinstance(confidence, int | float):
             parts.append(f"confidence={confidence:.2f}")
 
         if not written:
             return Summary(
                 status="failed",
-                message="finished without expected plan files",
+                message="finished without analyzer outputs",
                 style="red",
             )
         return Summary(status="completed", message="completed: " + "; ".join(parts), style="green")
 
-    def _summarize_modeler(self) -> Summary:
+    def _summarize_builder(self) -> Summary:
         model_path = self.workspace.root / "generated" / "model.py"
         step_path = self.workspace.root / "artifacts" / "model.step"
         stl_path = self.workspace.root / "artifacts" / "model.stl"
@@ -291,6 +306,9 @@ class ProgressReporter:
         elif status == "WARN":
             style = "yellow"
             state = "warning"
+        elif status == "BLOCKED":
+            style = "yellow"
+            state = "blocked"
         else:
             style = "red"
             state = "failed"

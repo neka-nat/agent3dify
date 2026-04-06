@@ -20,12 +20,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="Model for the supervisor agent. Overrides SUPERVISOR_MODEL or AGENT_MODEL.",
     )
     parser.add_argument(
+        "--analyzer-model",
         "--planner-model",
-        help="Model for the drawing-planner subagent. Defaults to the supervisor model.",
+        dest="analyzer_model",
+        help="Model for the optional drawing-analyzer subagent. Defaults to the supervisor model.",
     )
     parser.add_argument(
+        "--builder-model",
         "--modeler-model",
-        help="Model for the cadquery-modeler subagent. Defaults to the supervisor model.",
+        dest="builder_model",
+        help="Model for the cadquery-builder subagent. Defaults to the supervisor model.",
     )
     parser.add_argument(
         "--verifier-model",
@@ -40,8 +44,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     load_dotenv()
     models = AgentModels.from_env().with_overrides(
         supervisor=args.supervisor_model,
-        planner=args.planner_model,
-        modeler=args.modeler_model,
+        analyzer=args.analyzer_model,
+        builder=args.builder_model,
         verifier=args.verifier_model,
     )
     return run(Path(args.drawing), models=models)
