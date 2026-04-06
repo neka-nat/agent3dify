@@ -1,6 +1,6 @@
 ---
 name: cadquery-codegen
-description: Use this skill when you need to implement a 3D model from the structured plan using CadQuery.
+description: Use this skill when you need to implement a 3D model from the structured plan and reference images using CadQuery.
 ---
 # cadquery-codegen
 
@@ -8,10 +8,12 @@ description: Use this skill when you need to implement a 3D model from the struc
 Produce executable CadQuery code and artifacts.
 
 ## Required inputs
-- spec/part_plan.json
-- spec/view_map.json (if available)
-- review/fix_plan.json (if available)
-- templates/model_template.py
+- /input/reference.png
+- /preprocessed/front_ref.png, /preprocessed/top_ref.png, /preprocessed/right_ref.png (if available)
+- /spec/part_plan.json
+- /spec/view_map.json (if available)
+- /review/fix_plan.json (if available)
+- /templates/model_template.py
 
 ## Required outputs
 - generated/model.py
@@ -26,12 +28,14 @@ Produce executable CadQuery code and artifacts.
 - artifacts/build_report.json
 
 ## Workflow
-1. Read the plan and latest fix plan
-2. Start from the template
-3. Write generated/model.py
-4. Execute:
+1. Read /input/reference.png with read_file
+2. Read any cropped reference views under /preprocessed/
+3. Read the plan and latest fix plan
+4. Start from the template
+5. Write /generated/model.py
+6. Execute:
    python generated/model.py --out-dir artifacts
-5. If it fails, inspect the error, patch the code, and rerun
+7. If it fails, inspect the error, patch the code, and rerun
 
 ## Coding requirements
 - The script must print exactly one JSON object to stdout
@@ -40,4 +44,7 @@ Produce executable CadQuery code and artifacts.
 - Keep view export directions stable across revisions
 
 ## Important
-Do not return success without actually executing the script.
+- Use absolute paths with file tools, for example /input/reference.png and /generated/model.py
+- Use relative paths only for shell execution commands
+- Treat the drawing image as a first-class input. If the plan conflicts with the image, prefer the image and preserve the ambiguity in comments or reports.
+- Do not return success without actually executing the script.

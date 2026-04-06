@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import json
-import os
 import uuid
 from pathlib import Path
 
 from dotenv import load_dotenv
 
 from .agent_factory import build_agent
+from .config import AgentModels
 from .prompts import MAIN_USER_PROMPT
 from .workspace import Workspace, default_workspace, prepare_local_workspace
 
@@ -16,7 +16,7 @@ def run(
     reference_image: Path,
     *,
     workspace: Workspace | None = None,
-    model_name: str | None = None,
+    models: AgentModels | None = None,
     debug: bool = True,
 ) -> int:
     load_dotenv()
@@ -27,10 +27,11 @@ def run(
 
     workspace = workspace or default_workspace()
     prepare_local_workspace(workspace, reference_image)
+    models = models or AgentModels.from_env()
 
     agent = build_agent(
         workspace,
-        model_name=model_name or os.environ.get("AGENT_MODEL", "google_genai:gemini-3.1-pro-preview"),
+        models=models,
         debug=debug,
     )
 
