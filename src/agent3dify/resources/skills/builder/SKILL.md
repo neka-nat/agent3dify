@@ -34,14 +34,13 @@ Produce executable CadQuery code and CAD artifacts.
 1. Read /input/reference.png with read_file
 2. Read optional preprocessed images when they exist
 3. If /review/fix_plan.json exists, read it before revising the model and treat it as the detailed source of revision edits
-4. If the raw drawing is cluttered, call image_editor to create a cleaner outline or extract a target view
-5. Either start from /templates/model_template.py or write from scratch
-6. Write /generated/model.py
-7. Execute:
+4. Either start from /templates/model_template.py or write from scratch
+5. Write /generated/model.py
+6. Execute:
    python generated/model.py --out-dir artifacts
-8. If it fails, inspect the error, patch the code, and rerun
-9. First make sure /artifacts/model.step is produced
-10. Add STL, projections, or reports only when they are clearly useful for the next step
+7. If it fails, inspect the error, patch the code, and rerun
+8. First make sure /artifacts/model.step is produced
+9. Add STL, projections, or reports only when they are clearly useful for the next step
 
 ## Important
 - Use absolute paths with file tools, for example /input/reference.png and /generated/model.py

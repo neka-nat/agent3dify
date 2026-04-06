@@ -121,6 +121,44 @@ def _strip_markdown_fences(text: str) -> str:
     return candidate
 
 
+def _extract_json_substring(text: str) -> str:
+    cleaned = _strip_markdown_fences(text)
+    if not cleaned:
+        raise RuntimeError("View detector returned an empty response.")
+
+    starts = [index for index in (cleaned.find("{"), cleaned.find("[")) if index != -1]
+    if not starts:
+        return cleaned
+
+    start = min(starts)
+    opening = cleaned[start]
+    closing = "}" if opening == "{" else "]"
+    depth = 0
+    in_string = False
+    escape = False
+    for index in range(start, len(cleaned)):
+        char = cleaned[index]
+        if in_string:
+            if escape:
+                escape = False
+            elif char == "\\":
+                escape = True
+            elif char == "\"":
+                in_string = False
+            continue
+
+        if char == "\"":
+            in_string = True
+        elif char == opening:
+            depth += 1
+        elif char == closing:
+            depth -= 1
+            if depth == 0:
+                return cleaned[start : index + 1]
+
+    return cleaned
+
+
 def _normalize_box_2d(value: object) -> tuple[int, int, int, int] | None:
     if not isinstance(value, list | tuple) or len(value) != 4:
         return None
@@ -154,12 +192,14 @@ def _candidate_matches_view(candidate: dict, view_name: str) -> bool:
 
 
 def parse_detection_response(response_text: str, *, view_name: str) -> DetectedView:
-    cleaned = _strip_markdown_fences(response_text)
+    cleaned = _extract_json_substring(response_text)
     payload = json.loads(cleaned)
 
     candidates: list[dict]
     if isinstance(payload, dict) and isinstance(payload.get("candidates"), list):
         candidates = [item for item in payload["candidates"] if isinstance(item, dict)]
+    elif isinstance(payload, dict):
+        candidates = [payload]
     elif isinstance(payload, list):
         candidates = [item for item in payload if isinstance(item, dict)]
     else:
@@ -209,12 +249,14 @@ class GoogleGenAIViewDetector:
             contents=[image, prompt],
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
+                response_modalities=["TEXT"],
                 thinking_config=types.ThinkingConfig(thinking_budget=0),
             ),
         )
-        if not response.text:
+        response_text = _extract_response_text(response)
+        if not response_text:
             raise RuntimeError("View detector returned an empty response.")
-        return parse_detection_response(response.text, view_name=view_name)
+        return parse_detection_response(response_text, view_name=view_name)
 
 
 class GoogleGenAIImageEditor:
@@ -270,6 +312,31 @@ def load_editor_input_images(paths: list[Path]) -> list[PILImage.Image]:
         image = PILImage.open(path)
         images.append(image.convert("RGBA"))
     return images
+
+
+def _extract_response_text(response: object) -> str | None:
+    parts = getattr(response, "parts", None)
+    if isinstance(parts, list):
+        texts: list[str] = []
+        for part in parts:
+            text = getattr(part, "text", None)
+            if isinstance(text, str) and text.strip():
+                thought = getattr(part, "thought", None)
+                if isinstance(thought, bool) and thought:
+                    continue
+                texts.append(text)
+        if texts:
+            return "".join(texts)
+
+    parsed = getattr(response, "parsed", None)
+    if isinstance(parsed, dict | list):
+        return json.dumps(parsed, ensure_ascii=False)
+
+    text = getattr(response, "text", None)
+    if isinstance(text, str) and text.strip():
+        return text
+
+    return None
 
 
 def validate_generated_image(image: PILImage.Image) -> None:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from pathlib import PurePosixPath
 
 import numpy as np
 from PIL import Image, ImageOps
@@ -20,6 +21,14 @@ from .image_editor import (
 )
 from .image_compare import edge_mask, iou, load_image, make_diff_board, mask_from_gray, normalize_for_compare
 from .workspace import Workspace
+
+
+def _is_reference_view_output(output_path: str) -> bool:
+    normalized = PurePosixPath("/" + output_path.lstrip("/"))
+    if normalized.parent.as_posix() != "/preprocessed":
+        return False
+    stem = normalized.stem.lower()
+    return "_ref" in stem
 
 
 def make_crop_reference_view_tool(workspace: Workspace):
@@ -154,6 +163,19 @@ def make_image_editor_tool(
         if not input_paths:
             raise ValueError("input_paths must contain at least one image path.")
 
+        normalized_operation = operation.strip().lower()
+        if normalized_operation == "custom" and _is_reference_view_output(output_path):
+            return {
+                "ok": False,
+                "operation": operation,
+                "output_path": output_path,
+                "input_paths": input_paths,
+                "error": (
+                    "custom cannot be used to create or overwrite reference view crops under /preprocessed/*. "
+                    "Use extract_view, or proceed without that reference view."
+                ),
+            }
+
         prompt = build_image_edit_prompt(
             operation=operation,
             view_name=view_name,
@@ -167,13 +189,24 @@ def make_image_editor_tool(
         detection: DetectedView | None = None
         crop_box: tuple[int, int, int, int] | None = None
 
-        if operation.strip().lower() == "extract_view":
+        if normalized_operation == "extract_view":
             if len(images) != 1:
                 raise ValueError("extract_view requires exactly one input image.")
             if not view_name:
                 raise ValueError("view_name is required for operation='extract_view'")
-            detection = view_detector.detect(view_name=view_name, image=images[0])
-            generated_image, crop_box = crop_detected_view(images[0], detection)
+            try:
+                detection = view_detector.detect(view_name=view_name, image=images[0])
+                generated_image, crop_box = crop_detected_view(images[0], detection)
+            except RuntimeError as exc:
+                return {
+                    "ok": False,
+                    "operation": operation,
+                    "output_path": output_path,
+                    "input_paths": input_paths,
+                    "prompt": prompt,
+                    "view_name": view_name,
+                    "error": str(exc),
+                }
         else:
             generated_image, text_response = editor_backend.edit(prompt=prompt, images=images)
 

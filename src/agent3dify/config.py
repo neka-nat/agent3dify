@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 DEFAULT_SUPERVISOR_MODEL = "openai:gpt-5"
 DEFAULT_BUILDER_MODEL = "google_genai:gemini-3.1-pro-preview"
-DEFAULT_VERIFIER_MODEL = "google_genai:gemini-3.1-flash-preview"
+DEFAULT_VERIFIER_MODEL = "google_genai:gemini-3-flash-preview"
 DEFAULT_IMAGE_EDITOR_MODEL = "gemini-3.1-flash-image-preview"
 DEFAULT_VIEW_DETECTOR_MODEL = "gemini-3-flash-preview"
 

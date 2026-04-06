@@ -13,7 +13,9 @@ SUPERVISOR_PROMPT = dedent(
     1. Use the image_editor tool when the drawing needs cleanup or view extraction before modeling or verification.
        - Use operation="extract_outline" to create a cleaner geometry-only drawing
        - Use operation="extract_view" with view_name like front, top, or right to detect and crop a specific orthographic view
-       - Use operation="custom" only for narrow corrective edits
+       - Use operation="custom" only for narrow corrective edits that do not create reference view images
+       - Never use operation="custom" to synthesize, redraw, or overwrite /preprocessed/*_ref.png
+       - If extract_view fails, keep that view missing and continue or mark the workflow blocked; do not replace it with a custom-generated reference
        - Save preprocessed outputs under /preprocessed/
 
     2. The primary implementation path is the "cadquery-builder" subagent.
@@ -63,7 +65,6 @@ BUILDER_SYSTEM_PROMPT = dedent(
     - Read /preprocessed/front_ref.png, /preprocessed/top_ref.png, and /preprocessed/right_ref.png when they exist
     - Read /review/fix_plan.json when it exists, before revising /generated/model.py
     - Read /templates/model_template.py when it helps, but do not treat it as mandatory
-    - Use the image_editor tool when a cleaned outline or a specific extracted view would materially help
     - Write /generated/model.py
     - Execute it
     - Repair it if execution fails
@@ -113,7 +114,8 @@ VERIFIER_SYSTEM_PROMPT = dedent(
       - /review/fix_plan.json
 
     If extracted reference views are missing, infer simple matches from filenames under /preprocessed/ and /artifacts/projections/.
-    If comparison inputs are still insufficient, use image_editor or write a blocked report that says which reference view is missing.
+    If extract_view fails for a needed reference view, do not use custom to fabricate that view.
+    If comparison inputs are still insufficient, write a blocked report that says which reference view is missing or unreliable.
 
     The fix plan must be concrete and patch-oriented, for example:
     - add one through-hole on the left flange

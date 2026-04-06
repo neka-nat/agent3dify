@@ -474,6 +474,14 @@ class ProgressReporter:
 
         if tool_name == "image_editor" and isinstance(tool_output, dict):
             parts = []
+            ok = tool_output.get("ok")
+            if ok is False:
+                error = tool_output.get("error")
+                if isinstance(error, str) and error.strip():
+                    parts.append("failed")
+                    parts.append(self._truncate_text(error, max_length=120))
+                    return "; ".join(parts)
+                return "failed"
             output_path = tool_output.get("output_path")
             if isinstance(output_path, str):
                 parts.append(output_path)

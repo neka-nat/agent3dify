@@ -22,12 +22,13 @@ Evaluate whether the current model matches the drawing closely enough.
 ## Workflow
 1. Read any extracted reference views under /preprocessed/
 2. If the needed reference views are missing, call image_editor to extract them from /input/reference.png when possible
-3. If no explicit extracted views exist, infer simple matches from filenames under /preprocessed/ and /artifacts/projections/
-4. For each matched view, call compare_projection_pair
-5. If compare output includes a diff board image, inspect it if needed
-6. Summarize mismatches into a concise report
-7. Create a patch-oriented fix plan for the builder
-8. If comparison inputs are insufficient, write a blocked report that says which reference view could not be established
+3. If extract_view fails, do not use custom to synthesize a replacement reference view crop
+4. If no explicit extracted views exist, infer simple matches from filenames under /preprocessed/ and /artifacts/projections/
+5. For each matched view, call compare_projection_pair
+6. If compare output includes a diff board image, inspect it if needed
+7. Summarize mismatches into a concise report
+8. Create a patch-oriented fix plan for the builder
+9. If comparison inputs are insufficient, write a blocked report that says which reference view could not be established
 
 ## compare_report.json recommended shape
 {
