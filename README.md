@@ -24,3 +24,5 @@ uv run agent3dify \
 ```
 
 `cadquery-builder` is the primary subagent. `drawing-analyzer` and `render-verifier` are optional helpers that run only when their outputs would materially help the build or revision.
+
+The builder now aims to get a working `artifacts/model.step` first. STL, projection images, and `build_report.json` are optional and are expected only when they help verification or debugging.

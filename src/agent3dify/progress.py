@@ -270,7 +270,7 @@ class ProgressReporter:
         if isinstance(summary, str) and summary.strip():
             parts.append(summary.strip())
 
-        if step_path.exists() and stl_path.exists():
+        if step_path.exists():
             return Summary(status="completed", message="completed: " + "; ".join(parts), style="green")
         if model_path.exists():
             return Summary(status="partial", message="partial: " + "; ".join(parts), style="yellow")

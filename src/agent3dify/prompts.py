@@ -15,12 +15,8 @@ SUPERVISOR_PROMPT = dedent(
        - It should read /analysis/analyzer_report.json, /analysis/view_map.json, /preprocessed/*.png, and /review/fix_plan.json when available
        - It must write generated/model.py
        - It must execute the script
-       - It must produce:
-         - artifacts/model.step
-         - artifacts/model.stl
-         - artifacts/projections/*.svg
-         - artifacts/projections/*.png
-         - artifacts/build_report.json
+       - It must produce at least artifacts/model.step
+       - It should also produce artifacts/model.stl, artifacts/projections/*, and artifacts/build_report.json when that materially helps verification or debugging
 
     2. The "drawing-analyzer" subagent is optional.
        - Use it before the builder when image preprocessing, cropped views, or ambiguity analysis would help
@@ -100,16 +96,18 @@ BUILDER_SYSTEM_PROMPT = dedent(
     - Read /analysis/view_map.json when it exists
     - Read /preprocessed/front_ref.png, /preprocessed/top_ref.png, and /preprocessed/right_ref.png when they exist
     - Read /review/fix_plan.json when it exists
-    - Read the template at /templates/model_template.py
+    - Read /templates/model_template.py when it helps, but do not treat it as mandatory
     - Write /generated/model.py
     - Execute it
     - Repair it if execution fails
-    - Keep iterating until artifacts are produced or the problem is truly blocked
+    - First get a valid STEP export working, then add extra exports only when useful
 
     Rules:
     - Use CadQuery
-    - Produce a single solid or assembly as appropriate
-    - Export STEP/STL and projection SVG/PNG files
+    - Prefer the simplest correct model that matches the drawing well enough
+    - A single solid is preferred, but an assembly is acceptable if it makes the modeling clearer
+    - Produce at least artifacts/model.step
+    - Add STL, projections, and build reports only when they are easy or needed for the next step
     - Base every change on the reference images and the latest analyzer/verifier hints
     - If analyzer or verifier hints conflict with the drawing image, prefer the drawing image and note the ambiguity in the generated code or report
     - Prefer explicit, readable code over clever code
@@ -119,7 +117,9 @@ BUILDER_SYSTEM_PROMPT = dedent(
     - For shell execution, also use relative paths like:
       python generated/model.py --out-dir artifacts
     - Do not use host absolute paths in shell commands
+    - You may write the script from scratch if the template slows you down
     - The analyzer report is optional. If it does not exist, continue from the drawing image alone.
+    - Do not delay a first working STEP export just to perfect projection rendering or reporting.
 
     Return only a concise summary to the supervisor.
     """
@@ -161,7 +161,8 @@ MAIN_USER_PROMPT = dedent(
     - Use drawing-analyzer only when preprocessing or artifact analysis would materially help.
     - Implement the model in CadQuery.
     - The builder must inspect the reference image and any analyzer or verifier outputs when available.
-    - Execute the code and produce STEP/STL/projection outputs.
+    - Execute the code and at minimum produce a STEP export.
+    - Add STL and projection outputs when they help verification or are straightforward to generate.
     - Compare rendered projections to the reference when enough inputs exist.
     - Revise only when there is concrete new feedback. Do not force a fixed number of revisions.
     - Prefer a correct, simple parametric model over a fancy one.
