@@ -11,7 +11,8 @@ Evaluate whether the current model matches the drawing closely enough.
 - /artifacts/projections/*.png
 
 ## Optional inputs
-- /analysis/view_map.json
+- /input/reference.png
+- /preprocessed/outline_only.png
 - /preprocessed/*_ref.png
 
 ## Required outputs
@@ -19,13 +20,14 @@ Evaluate whether the current model matches the drawing closely enough.
 - /review/fix_plan.json
 
 ## Workflow
-1. Read /analysis/view_map.json when it exists
-2. If no explicit view map exists, infer simple matches from filenames under /preprocessed/ and /artifacts/projections/
-3. For each matched view, call compare_projection_pair
-4. If compare output includes a diff board image, inspect it if needed
-5. Summarize mismatches into a concise report
-6. Create a patch-oriented fix plan for the builder
-7. If comparison inputs are insufficient, write a blocked report that recommends running drawing-analyzer
+1. Read any extracted reference views under /preprocessed/
+2. If the needed reference views are missing, call image_editor to extract them from /input/reference.png when possible
+3. If no explicit extracted views exist, infer simple matches from filenames under /preprocessed/ and /artifacts/projections/
+4. For each matched view, call compare_projection_pair
+5. If compare output includes a diff board image, inspect it if needed
+6. Summarize mismatches into a concise report
+7. Create a patch-oriented fix plan for the builder
+8. If comparison inputs are insufficient, write a blocked report that says which reference view could not be established
 
 ## compare_report.json recommended shape
 {

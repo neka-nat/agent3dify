@@ -11,6 +11,7 @@ dependencies = [
     "cadquery>=2.7.0",
     "cairosvg>=2.9.0",
     "deepagents>=0.4.12",
+    "google-genai>=1.0.0",
     "langchain>=1.2.15",
     "langchain-openai>=1.1.12",
     "numpy>=2.4.4",

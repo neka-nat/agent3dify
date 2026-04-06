@@ -17,13 +17,11 @@ from .workspace import Workspace
 ROOT_AGENT_NAME = "drawing-to-cad-supervisor-local-shell"
 
 SUBAGENT_LABELS = {
-    "drawing-analyzer": "analyzer",
     "cadquery-builder": "builder",
     "render-verifier": "verifier",
 }
 
 SUBAGENT_STYLES = {
-    "drawing-analyzer": "cyan",
     "cadquery-builder": "magenta",
     "render-verifier": "yellow",
 }
@@ -69,7 +67,7 @@ class ProgressReporter:
         table = Table.grid(padding=(0, 2))
         table.add_row("Workspace", str(self.workspace.root))
         table.add_row("Supervisor", self.models.supervisor)
-        table.add_row("Analyzer", self.models.analyzer_model())
+        table.add_row("ImageEditor", self.models.image_editor_model())
         table.add_row("Builder", self.models.builder_model())
         table.add_row("Verifier", self.models.verifier_model())
         self.console.print(Panel(table, title="Agent3dify Run", border_style="blue"))
@@ -165,20 +163,16 @@ class ProgressReporter:
             command = str(tool_input.get("command", "")).strip()
             if command:
                 self._log(subagent, f"execute {self._truncate_command(command)}", style="dim")
-        elif subagent == "drawing-analyzer" and tool_name == "crop_reference_view":
+        elif tool_name == "image_editor":
+            operation = tool_input.get("operation")
             output_path = tool_input.get("output_path")
-            if isinstance(output_path, str):
-                self._log(subagent, f"crop {output_path}", style="dim")
-        elif subagent == "drawing-analyzer" and tool_name == "preprocess_reference_image":
-            output_path = tool_input.get("output_path")
-            mode = tool_input.get("mode")
-            if isinstance(output_path, str):
-                suffix = f" ({mode})" if isinstance(mode, str) else ""
-                self._log(subagent, f"preprocess {output_path}{suffix}", style="dim")
-        elif subagent == "drawing-analyzer" and tool_name == "inspect_step_model":
-            step_path = tool_input.get("step_path")
-            if isinstance(step_path, str):
-                self._log(subagent, f"inspect {step_path}", style="dim")
+            view_name = tool_input.get("view_name")
+            detail = str(operation) if operation else "edit"
+            if isinstance(view_name, str) and view_name:
+                detail += f"({view_name})"
+            if isinstance(output_path, str) and output_path:
+                detail += f" -> {output_path}"
+            self._log("image-editor", detail, style="cyan")
         elif subagent == "render-verifier" and tool_name == "compare_projection_pair":
             reference = self._basename(tool_input.get("reference_path"))
             candidate = self._basename(tool_input.get("candidate_path"))
@@ -199,57 +193,11 @@ class ProgressReporter:
         return None
 
     def _summarize_subagent(self, subagent: str) -> Summary:
-        if subagent == "drawing-analyzer":
-            return self._summarize_analyzer()
         if subagent == "cadquery-builder":
             return self._summarize_builder()
         if subagent == "render-verifier":
             return self._summarize_verifier()
         return Summary(status="completed", message="completed", style="green")
-
-    def _summarize_analyzer(self) -> Summary:
-        analyzer_report_path = self.workspace.root / "analysis" / "analyzer_report.json"
-        view_map_path = self.workspace.root / "analysis" / "view_map.json"
-        analyzer_report = self._load_json(analyzer_report_path)
-        view_map = self._load_json(view_map_path)
-        crops = sorted((self.workspace.root / "preprocessed").glob("*_ref.png"))
-
-        parts: list[str] = []
-        written = []
-        if analyzer_report_path.exists():
-            written.append("analyzer_report.json")
-        if view_map_path.exists():
-            written.append("view_map.json")
-        if written:
-            parts.append(f"wrote {', '.join(written)}")
-
-        views = sorted(view_map.keys()) if isinstance(view_map, dict) else []
-        if views:
-            parts.append(f"views={', '.join(views)}")
-
-        if crops:
-            parts.append(f"crops={len(crops)}")
-
-        drawing_analysis = analyzer_report.get("drawing_analysis") if isinstance(analyzer_report, dict) else None
-        builder_hints = analyzer_report.get("builder_hints") if isinstance(analyzer_report, dict) else None
-        step_analysis = analyzer_report.get("step_analysis") if isinstance(analyzer_report, dict) else None
-
-        if isinstance(builder_hints, list):
-            parts.append(f"hints={len(builder_hints)}")
-        if isinstance(step_analysis, dict) and step_analysis:
-            parts.append("step-analysis")
-
-        confidence = drawing_analysis.get("overall_confidence") if isinstance(drawing_analysis, dict) else None
-        if isinstance(confidence, int | float):
-            parts.append(f"confidence={confidence:.2f}")
-
-        if not written:
-            return Summary(
-                status="failed",
-                message="finished without analyzer outputs",
-                style="red",
-            )
-        return Summary(status="completed", message="completed: " + "; ".join(parts), style="green")
 
     def _summarize_builder(self) -> Summary:
         model_path = self.workspace.root / "generated" / "model.py"

@@ -10,7 +10,6 @@ from .workspace import Workspace
 
 
 SUBAGENT_NAMES = {
-    "drawing-analyzer",
     "cadquery-builder",
     "render-verifier",
 }
@@ -59,8 +58,6 @@ class ExecutionGuard:
     def _record_subagent_completion(self, subagent: str) -> None:
         if subagent == "cadquery-builder":
             self._record_builder_completion()
-        elif subagent == "drawing-analyzer":
-            self._record_analyzer_completion()
         elif subagent == "render-verifier":
             self._record_verifier_completion()
 
@@ -81,20 +78,6 @@ class ExecutionGuard:
             agent_name="cadquery-builder",
             signature=signature,
             reason="builder outputs were unchanged across a revision",
-        )
-
-    def _record_analyzer_completion(self) -> None:
-        signature = self._signature_for_paths(
-            [
-                "analysis/analyzer_report.json",
-                "analysis/view_map.json",
-            ],
-            patterns=["preprocessed/**/*"],
-        )
-        self._set_pending_if_repeated(
-            agent_name="drawing-analyzer",
-            signature=signature,
-            reason="analyzer outputs were unchanged across a re-run",
         )
 
     def _record_verifier_completion(self) -> None:

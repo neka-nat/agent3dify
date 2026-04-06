@@ -6,8 +6,8 @@ A tool for converting 2D drawings into 3D models using a combination of AI agent
 flowchart TD
     U[User] --> S[Supervisor]
 
-    S -->|optional analysis| A[Drawing Analyzer]
-    A -->|summary / completion| S
+    S -->|optional preprocessing| E[image_editor Tool]
+    E -->|result / completion| S
 
     S -->|build/revision task| B[CadQuery Builder]
     B -->|summary / completion| S
@@ -32,11 +32,11 @@ Run the agent with custom models:
 uv run agent3dify \
   --drawing data/b9-1.png \
   --model openai:gpt-5 \
-  --analyzer-model google_genai:gemini-3.1-pro-preview \
+  --image-editor-model gemini-3-pro-image-preview \
   --builder-model google_genai:gemini-3.1-pro-preview \
   --verifier-model google_genai:gemini-3.1-flash-preview
 ```
 
-`cadquery-builder` is the primary subagent. `drawing-analyzer` and `render-verifier` are optional helpers that run only when their outputs would materially help the build or revision.
+`cadquery-builder` is the primary subagent. `image_editor` is an optional preprocessing tool for outline extraction and view extraction, and `render-verifier` is an optional review subagent.
 
 The builder now aims to get a working `artifacts/model.step` first. STL, projection images, and `build_report.json` are optional and are expected only when they help verification or debugging.

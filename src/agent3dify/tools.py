@@ -6,6 +6,14 @@ import numpy as np
 from PIL import Image, ImageOps
 from langchain.tools import tool
 
+from .image_editor import (
+    GoogleGenAIImageEditor,
+    ImageEditorBackend,
+    build_image_edit_prompt,
+    load_editor_input_images,
+    save_generated_image,
+    validate_generated_image,
+)
 from .image_compare import edge_mask, iou, load_image, make_diff_board, mask_from_gray, normalize_for_compare
 from .workspace import Workspace
 
@@ -109,6 +117,64 @@ def make_preprocess_reference_image_tool(workspace: Workspace):
         }
 
     return preprocess_reference_image
+
+
+def make_image_editor_tool(
+    workspace: Workspace,
+    *,
+    model_name: str,
+    backend: ImageEditorBackend | None = None,
+):
+    editor_backend = backend or GoogleGenAIImageEditor(model=model_name)
+
+    @tool(parse_docstring=True)
+    def image_editor(
+        operation: str,
+        input_paths: list[str],
+        output_path: str,
+        view_name: str | None = None,
+        instruction: str | None = None,
+    ) -> dict:
+        """Edit a drawing image with an image model and save the result into the workspace.
+
+        Args:
+            operation: One of extract_outline, extract_view, or custom.
+            input_paths: Workspace-relative image paths used as editing inputs.
+            output_path: Workspace-relative PNG path for the edited result.
+            view_name: Required when operation is extract_view.
+            instruction: Required when operation is custom.
+        """
+        if not input_paths:
+            raise ValueError("input_paths must contain at least one image path.")
+
+        prompt = build_image_edit_prompt(
+            operation=operation,
+            view_name=view_name,
+            instruction=instruction,
+        )
+        source_paths = [workspace.resolve_path(path_str) for path_str in input_paths]
+        output_file = workspace.resolve_path(output_path)
+
+        images = load_editor_input_images(source_paths)
+        generated_image, text_response = editor_backend.edit(prompt=prompt, images=images)
+        validate_generated_image(generated_image)
+        save_generated_image(generated_image, output_file)
+
+        payload = {
+            "ok": True,
+            "operation": operation,
+            "output_path": output_path,
+            "input_paths": input_paths,
+            "prompt": prompt,
+            "size": [generated_image.width, generated_image.height],
+        }
+        if view_name:
+            payload["view_name"] = view_name
+        if text_response:
+            payload["text_response"] = text_response
+        return payload
+
+    return image_editor
 
 
 def make_compare_projection_pair_tool(workspace: Workspace):
