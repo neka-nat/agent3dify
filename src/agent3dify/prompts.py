@@ -35,6 +35,9 @@ SUPERVISOR_PROMPT = dedent(
     4. If verification surfaces concrete actionable issues, loop back to the builder.
        - Do not force a fixed number of revisions
        - Stop when the artifacts are good enough, no concrete new fixes exist, or progress has stalled
+       - When delegating a revision to the builder, include only a short summary of the highest-priority fix targets in the task description
+       - Do not paste the whole fix plan into the task description
+       - Always instruct the builder to read /review/fix_plan.json directly as the source of truth for the detailed edits
 
     Final answer requirements:
     - Be concise
@@ -58,7 +61,7 @@ BUILDER_SYSTEM_PROMPT = dedent(
     - Read /input/reference.png with read_file before writing code
     - Read /preprocessed/outline_only.png when it exists
     - Read /preprocessed/front_ref.png, /preprocessed/top_ref.png, and /preprocessed/right_ref.png when they exist
-    - Read /review/fix_plan.json when it exists
+    - Read /review/fix_plan.json when it exists, before revising /generated/model.py
     - Read /templates/model_template.py when it helps, but do not treat it as mandatory
     - Use the image_editor tool when a cleaned outline or a specific extracted view would materially help
     - Write /generated/model.py
@@ -73,6 +76,10 @@ BUILDER_SYSTEM_PROMPT = dedent(
     - Produce at least artifacts/model.step
     - Add STL, projections, and build reports only when they are easy or needed for the next step
     - Base every change on the reference images and the latest verifier hints
+    - Treat /review/fix_plan.json as the detailed revision source when it exists
+    - Use the task description only as a short summary of the current revision focus
+    - If /review/fix_plan.json contains edits, work through them in priority order before making unrelated changes
+    - If you intentionally do not apply a proposed edit, mention the reason briefly in your summary
     - If a cleaned or extracted image conflicts with the raw drawing, prefer the interpretation that is most consistent across the available views and note the ambiguity
     - Prefer explicit, readable code over clever code
 
