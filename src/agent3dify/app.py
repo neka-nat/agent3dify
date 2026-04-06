@@ -7,9 +7,11 @@ from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
+from langgraph.errors import GraphRecursionError
 
 from .agent_factory import build_agent
 from .config import AgentModels
+from .execution_guard import ExecutionGuard, StopRunRequested
 from .progress import ROOT_AGENT_NAME, ProgressReporter
 from .prompts import MAIN_USER_PROMPT
 from .workspace import Workspace, default_workspace, prepare_local_workspace
@@ -18,10 +20,12 @@ from .workspace import Workspace, default_workspace, prepare_local_workspace
 async def _invoke_with_progress(
     agent: Any,
     *,
+    workspace: Workspace,
     config: dict[str, Any],
-    reporter: ProgressReporter,
-) -> dict[str, Any]:
+    reporter: ProgressReporter | None = None,
+) -> Any:
     final_output: dict[str, Any] | None = None
+    guard = ExecutionGuard(workspace=workspace)
 
     try:
         async for event in agent.astream_events(
@@ -30,7 +34,9 @@ async def _invoke_with_progress(
             version="v2",
             include_types=["chain", "tool"],
         ):
-            reporter.handle_event(event)
+            guard.handle_event(event)
+            if reporter is not None:
+                reporter.handle_event(event)
             if (
                 event.get("event") == "on_chain_end"
                 and event.get("name") == ROOT_AGENT_NAME
@@ -39,8 +45,18 @@ async def _invoke_with_progress(
                 output = event.get("data", {}).get("output")
                 if isinstance(output, dict):
                     final_output = output
+    except StopRunRequested as stop:
+        if reporter is not None:
+            reporter.report_stop(stop.reason)
+        return guard.build_stop_message(stop.reason)
+    except GraphRecursionError as exc:
+        reason = f"graph recursion limit reached before convergence: {exc}"
+        if reporter is not None:
+            reporter.report_stop(reason)
+        return guard.build_stop_message(reason)
     except Exception as exc:
-        reporter.report_exception(exc)
+        if reporter is not None:
+            reporter.report_exception(exc)
         raise
 
     if final_output is None:
@@ -58,17 +74,18 @@ async def _invoke_with_progress(
 def _invoke_with_progress_sync(
     agent: Any,
     *,
+    workspace: Workspace,
     config: dict[str, Any],
-    reporter: ProgressReporter,
-) -> dict[str, Any]:
+    reporter: ProgressReporter | None = None,
+) -> Any:
     try:
         asyncio.get_running_loop()
     except RuntimeError:
-        return asyncio.run(_invoke_with_progress(agent, config=config, reporter=reporter))
+        return asyncio.run(_invoke_with_progress(agent, workspace=workspace, config=config, reporter=reporter))
 
     raise RuntimeError(
-        "run(debug=True) cannot be used from an existing asyncio event loop. "
-        "Use run(debug=False) or call _invoke_with_progress() from async code."
+        "run() cannot be used from an existing asyncio event loop. "
+        "Call _invoke_with_progress() from async code instead."
     )
 
 
@@ -95,17 +112,17 @@ def run(
         debug=False,
     )
 
-    config = {"configurable": {"thread_id": str(uuid.uuid4())}}
-    if debug:
-        reporter = ProgressReporter(workspace=workspace, models=models)
-        result = _invoke_with_progress_sync(agent, config=config, reporter=reporter)
-    else:
-        result = agent.invoke(
-            {"messages": [{"role": "user", "content": MAIN_USER_PROMPT}]},
-            config=config,
-        )
+    config = {
+        "configurable": {"thread_id": str(uuid.uuid4())},
+        "recursion_limit": 100,
+    }
+    reporter = ProgressReporter(workspace=workspace, models=models) if debug else None
+    result = _invoke_with_progress_sync(agent, workspace=workspace, config=config, reporter=reporter)
 
-    final_message = result["messages"][-1].content
+    if isinstance(result, str):
+        final_message = result
+    else:
+        final_message = result["messages"][-1].content
     print("\n=== FINAL ANSWER ===")
     if isinstance(final_message, str):
         print(final_message)

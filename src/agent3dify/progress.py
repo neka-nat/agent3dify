@@ -188,6 +188,9 @@ class ProgressReporter:
     def report_exception(self, exc: BaseException) -> None:
         self.console.print(f"[bold red]run failed[/bold red] {exc}")
 
+    def report_stop(self, reason: str) -> None:
+        self.console.print(f"[bold yellow]run stopped[/bold yellow] {reason}")
+
     def _agent_from_parent_ids(self, parent_ids: list[str]) -> str | None:
         for run_id in reversed(parent_ids):
             agent = self.chain_run_to_agent.get(run_id)
