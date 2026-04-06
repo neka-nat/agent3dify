@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import time
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -93,6 +94,7 @@ class ProgressReporter:
             return
 
         if event_type == "on_chain_end" and run_id in self.chain_run_to_agent:
+            self._on_subagent_chain_end(self.chain_run_to_agent[run_id], data.get("output"))
             self.chain_run_to_agent.pop(run_id, None)
             return
 
@@ -110,6 +112,22 @@ class ProgressReporter:
             self._on_tool_start(
                 tool_name=name or "",
                 tool_input=tool_input if isinstance(tool_input, dict) else {},
+                parent_ids=parent_ids if isinstance(parent_ids, list) else [],
+            )
+            return
+
+        if event_type == "on_tool_end":
+            self._on_tool_end(
+                tool_name=name or "",
+                tool_output=data.get("output"),
+                parent_ids=parent_ids if isinstance(parent_ids, list) else [],
+            )
+            return
+
+        if event_type == "on_tool_error":
+            self._on_tool_error(
+                tool_name=name or "",
+                error=data.get("error"),
                 parent_ids=parent_ids if isinstance(parent_ids, list) else [],
             )
 
@@ -132,6 +150,11 @@ class ProgressReporter:
         state.detail = message
         self._log(subagent, message, style=SUBAGENT_STYLES[subagent])
 
+        description = tool_input.get("description")
+        description_text = self._truncate_text(self._coerce_text(description), max_length=180)
+        if description_text:
+            self._log(subagent, f"task in: {description_text}", style="dim")
+
     def _on_task_end(self, run_id: str) -> None:
         subagent = self.task_run_to_agent.pop(run_id, None)
         if subagent is None:
@@ -146,6 +169,11 @@ class ProgressReporter:
         state.detail = summary.message
         self._log(subagent, summary.message, style=summary.style)
 
+    def _on_subagent_chain_end(self, subagent: str, output: Any) -> None:
+        report = self._extract_agent_report(output)
+        if report:
+            self._log(subagent, f"task out: {self._truncate_text(report, max_length=180)}", style="dim")
+
     def _on_tool_start(
         self,
         *,
@@ -159,25 +187,41 @@ class ProgressReporter:
             if len(running_agents) == 1:
                 subagent = running_agents[0]
 
-        if subagent == "cadquery-builder" and tool_name == "execute":
-            command = str(tool_input.get("command", "")).strip()
-            if command:
-                self._log(subagent, f"execute {self._truncate_command(command)}", style="dim")
-        elif tool_name == "image_editor":
-            operation = tool_input.get("operation")
-            output_path = tool_input.get("output_path")
-            view_name = tool_input.get("view_name")
-            detail = str(operation) if operation else "edit"
-            if isinstance(view_name, str) and view_name:
-                detail += f"({view_name})"
-            if isinstance(output_path, str) and output_path:
-                detail += f" -> {output_path}"
-            self._log("image-editor", detail, style="cyan")
-        elif subagent == "render-verifier" and tool_name == "compare_projection_pair":
-            reference = self._basename(tool_input.get("reference_path"))
-            candidate = self._basename(tool_input.get("candidate_path"))
-            if reference and candidate:
-                self._log(subagent, f"compare {reference} vs {candidate}", style="dim")
+        detail = self._summarize_tool_input(tool_name, tool_input)
+        if detail:
+            self._log(subagent or "supervisor", f"tool {tool_name} in: {detail}", style="dim")
+
+    def _on_tool_end(
+        self,
+        *,
+        tool_name: str,
+        tool_output: Any,
+        parent_ids: list[str],
+    ) -> None:
+        subagent = self._agent_from_parent_ids(parent_ids)
+        if subagent is None:
+            running_agents = [name for name, state in self.subagent_states.items() if state.active_runs > 0]
+            if len(running_agents) == 1:
+                subagent = running_agents[0]
+
+        detail = self._summarize_tool_output(tool_name, tool_output)
+        if detail:
+            self._log(subagent or "supervisor", f"tool {tool_name} out: {detail}", style="dim")
+
+    def _on_tool_error(
+        self,
+        *,
+        tool_name: str,
+        error: Any,
+        parent_ids: list[str],
+    ) -> None:
+        subagent = self._agent_from_parent_ids(parent_ids)
+        if subagent is None:
+            running_agents = [name for name, state in self.subagent_states.items() if state.active_runs > 0]
+            if len(running_agents) == 1:
+                subagent = running_agents[0]
+        detail = self._truncate_text(self._coerce_text(error), max_length=180) or "unknown error"
+        self._log(subagent or "supervisor", f"tool {tool_name} error: {detail}", style="red")
 
     def report_exception(self, exc: BaseException) -> None:
         self.console.print(f"[bold red]run failed[/bold red] {exc}")
@@ -290,6 +334,191 @@ class ProgressReporter:
         if not isinstance(value, str) or not value:
             return None
         return Path(value).name
+
+    def _truncate_text(self, text: str, *, max_length: int = 120) -> str:
+        compact = " ".join(text.split())
+        if len(compact) <= max_length:
+            return compact
+        return compact[: max_length - 3] + "..."
+
+    def _coerce_text(self, value: Any) -> str:
+        if value is None:
+            return ""
+        if isinstance(value, str):
+            return value
+        if isinstance(value, dict):
+            text_value = value.get("text")
+            if isinstance(text_value, str):
+                return text_value
+            content_value = value.get("content")
+            if content_value is not None:
+                return self._coerce_text(content_value)
+        if isinstance(value, dict):
+            return json.dumps(value, ensure_ascii=False)
+        if isinstance(value, Sequence) and not isinstance(value, str | bytes | bytearray):
+            parts: list[str] = []
+            for item in value:
+                text = self._coerce_text(item)
+                if text:
+                    parts.append(text)
+            return " ".join(parts)
+        content = getattr(value, "content", None)
+        if content is not None:
+            return self._coerce_text(content)
+        return str(value)
+
+    def _extract_agent_report(self, output: Any) -> str | None:
+        if not isinstance(output, dict):
+            return None
+        messages = output.get("messages")
+        if not isinstance(messages, list) or not messages:
+            return None
+        last_message = messages[-1]
+        if isinstance(last_message, dict) and "content" in last_message:
+            return self._coerce_text(last_message.get("content"))
+        return self._coerce_text(last_message)
+
+    def _summarize_tool_input(self, tool_name: str, tool_input: dict[str, Any]) -> str | None:
+        if tool_name == "execute":
+            command = str(tool_input.get("command", "")).strip()
+            return self._truncate_command(command) if command else None
+
+        if tool_name == "image_editor":
+            operation = str(tool_input.get("operation", "")).strip() or "edit"
+            parts = [operation]
+            view_name = tool_input.get("view_name")
+            if isinstance(view_name, str) and view_name:
+                parts[-1] += f"({view_name})"
+            input_paths = tool_input.get("input_paths")
+            if isinstance(input_paths, list) and input_paths:
+                names = [self._basename(item) or str(item) for item in input_paths[:3]]
+                parts.append("from=" + ",".join(names))
+            output_path = tool_input.get("output_path")
+            if isinstance(output_path, str) and output_path:
+                parts.append("to=" + output_path)
+            instruction = tool_input.get("instruction")
+            if isinstance(instruction, str) and instruction.strip():
+                parts.append("instruction=" + self._truncate_text(instruction, max_length=80))
+            return "; ".join(parts)
+
+        if tool_name == "compare_projection_pair":
+            reference = self._basename(tool_input.get("reference_path"))
+            candidate = self._basename(tool_input.get("candidate_path"))
+            diff = self._basename(tool_input.get("diff_out_path"))
+            parts = []
+            if reference:
+                parts.append(f"ref={reference}")
+            if candidate:
+                parts.append(f"cand={candidate}")
+            if diff:
+                parts.append(f"diff={diff}")
+            return "; ".join(parts) if parts else None
+
+        if tool_name == "read_file":
+            path = tool_input.get("file_path") or tool_input.get("path")
+            if isinstance(path, str):
+                offset = tool_input.get("offset")
+                limit = tool_input.get("limit")
+                suffix = []
+                if isinstance(offset, int):
+                    suffix.append(f"offset={offset}")
+                if isinstance(limit, int):
+                    suffix.append(f"limit={limit}")
+                if suffix:
+                    return f"{path}; " + "; ".join(suffix)
+                return path
+
+        if tool_name in {"write_file", "edit_file"}:
+            path = tool_input.get("file_path") or tool_input.get("path")
+            if isinstance(path, str):
+                return path
+
+        if tool_name in {"ls", "glob"}:
+            path = tool_input.get("path")
+            pattern = tool_input.get("pattern")
+            if isinstance(path, str):
+                return path
+            if isinstance(pattern, str):
+                return pattern
+
+        if tool_name == "grep":
+            pattern = tool_input.get("pattern")
+            search_glob = tool_input.get("glob")
+            if isinstance(pattern, str):
+                if isinstance(search_glob, str) and search_glob:
+                    return f"{pattern} in {search_glob}"
+                return pattern
+
+        if not tool_input:
+            return None
+        return self._truncate_text(self._coerce_text(tool_input), max_length=140)
+
+    def _summarize_tool_output(self, tool_name: str, tool_output: Any) -> str | None:
+        if tool_name == "execute":
+            text = self._coerce_text(tool_output).strip()
+            if not text:
+                return "no output"
+            lines = [line.strip() for line in text.splitlines() if line.strip()]
+            status_line = next((line for line in reversed(lines) if line.startswith("[Command ")), None)
+            preview = next((line for line in reversed(lines) if not line.startswith("[Command ")), "")
+            parts = []
+            if status_line:
+                parts.append(status_line.strip("[]"))
+            if preview:
+                parts.append(self._truncate_text(preview, max_length=120))
+            return "; ".join(parts) if parts else "completed"
+
+        if tool_name == "image_editor" and isinstance(tool_output, dict):
+            parts = []
+            output_path = tool_output.get("output_path")
+            if isinstance(output_path, str):
+                parts.append(output_path)
+            size = tool_output.get("size")
+            if isinstance(size, list | tuple) and len(size) == 2:
+                parts.append(f"size={size[0]}x{size[1]}")
+            confidence = tool_output.get("confidence")
+            if isinstance(confidence, int | float):
+                parts.append(f"confidence={confidence:.2f}")
+            reason = tool_output.get("reason")
+            if isinstance(reason, str) and reason.strip():
+                parts.append("reason=" + self._truncate_text(reason, max_length=80))
+            return "; ".join(parts) if parts else "completed"
+
+        if tool_name == "compare_projection_pair" and isinstance(tool_output, dict):
+            parts = []
+            status = tool_output.get("status")
+            if isinstance(status, str):
+                parts.append(f"status={status}")
+            score = tool_output.get("score")
+            if isinstance(score, int | float):
+                parts.append(f"score={score:.3f}")
+            diff_path = tool_output.get("diff_path")
+            if isinstance(diff_path, str):
+                parts.append(diff_path)
+            return "; ".join(parts) if parts else "completed"
+
+        if tool_name == "read_file":
+            text = self._coerce_text(tool_output)
+            if not text:
+                return "empty"
+            line_count = len(text.splitlines())
+            preview = self._truncate_text(text, max_length=100)
+            return f"{line_count} lines; {preview}"
+
+        if tool_name in {"write_file", "edit_file", "ls", "glob", "grep"}:
+            text = self._coerce_text(tool_output)
+            if not text:
+                return "completed"
+            line_count = len([line for line in text.splitlines() if line.strip()])
+            preview = self._truncate_text(text, max_length=100)
+            if line_count > 1:
+                return f"{line_count} lines; {preview}"
+            return preview
+
+        text = self._coerce_text(tool_output)
+        if not text:
+            return None
+        return self._truncate_text(text, max_length=140)
 
     def _elapsed(self, started_at: float) -> str:
         total_seconds = max(0, int(time.monotonic() - started_at))
