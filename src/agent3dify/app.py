@@ -30,7 +30,7 @@ def run(
 
     agent = build_agent(
         workspace,
-        model_name=model_name or os.environ.get("AGENT_MODEL", "openai:gpt-5"),
+        model_name=model_name or os.environ.get("AGENT_MODEL", "google_genai:gemini-3.1-pro-preview"),
         debug=debug,
     )
 
