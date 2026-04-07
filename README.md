@@ -26,9 +26,13 @@ flowchart TD
     V -->|summary / completion| S
 ```
 
+## Installation
+
 ```bash
 uv sync
 ```
+
+## Usage
 
 Run the agent with the default models:
 
@@ -48,3 +52,12 @@ uv run agent3dify \
   --verifier-model google_genai:gemini-3.1-flash-preview
 ```
 
+## Demo
+
+### Input
+
+![Input](data/b9-1.png)
+
+### Output
+
+![Output](assets/result.png)
