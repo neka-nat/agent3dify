@@ -30,6 +30,8 @@ flowchart TD
 
 ```bash
 uv sync
+cp .env.example .env
+# Edit .env to set your API keys
 ```
 
 ## Usage
