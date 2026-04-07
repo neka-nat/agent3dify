@@ -2,6 +2,16 @@
 
 A tool for converting 2D drawings into 3D models using a combination of AI agents.
 
+This project is a development of [cad3dify](https://github.com/neka-nat/cad3dify) to an agent-based system. The root agent uses the following tools and subagents to operate:
+
+- image_editor Tool
+- CadQuery Builder
+- Render Verifier
+
+The image_editor Tool is an optional preprocessing tool: `extract_outline` and `custom` use image editing, while `extract_view` uses Gemini image understanding to detect a target view and crop it deterministically. The Render Verifier is an optional review subagent.
+
+The CadQuery Builder is the primary subagent. It is responsible for building the 3D model from the drawing image with optional preprocessing views and verifier guidance.
+
 ```mermaid
 flowchart TD
     U[User] --> S[Supervisor]
@@ -38,6 +48,3 @@ uv run agent3dify \
   --verifier-model google_genai:gemini-3.1-flash-preview
 ```
 
-`cadquery-builder` is the primary subagent. `image_editor` is an optional preprocessing tool: `extract_outline` and `custom` use image editing, while `extract_view` uses Gemini image understanding to detect a target view and crop it deterministically. `render-verifier` is an optional review subagent.
-
-The builder now aims to get a working `artifacts/model.step` first. STL, projection images, and `build_report.json` are optional and are expected only when they help verification or debugging.
