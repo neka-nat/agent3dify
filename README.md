@@ -16,14 +16,10 @@ The CadQuery Builder is the primary subagent. It is responsible for building the
 flowchart TD
     U[User] --> S[Supervisor]
 
-    S -->|optional preprocessing| E[image_editor Tool]
-    E -->|result / completion| S
-
-    S -->|build/revision task| B[CadQuery Builder]
-    B -->|summary / completion| S
-
-    S -->|optional verification| V[Render Verifier]
-    V -->|summary / completion| S
+    S <-->|optional preprocessing| E[image_editor Tool]
+    S <-->|build/revision task| B[CadQuery Builder]
+    S <-->|verification| V[Render Verifier]
+    V <--> E
 ```
 
 ## Installation
